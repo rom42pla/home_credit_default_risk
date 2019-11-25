@@ -12,7 +12,7 @@ Dopodichè è possibile prendere visione delle [issues](https://github.com/rom42
 
 E' possibile salvare su GitHub i cambiamenti effettuati in locale alla branch usando i tre comandi (da `FDSFinalProject1920`):
 ```
-git add .
+git add scripts
 git commit -m "<cambiamentiEffettuati>"
 git push
 ```
