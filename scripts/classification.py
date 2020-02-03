@@ -129,7 +129,7 @@ def predict(X_train, X_test, y_train, X_validate=None, y_validate=None, mode="en
         classifier_name = "Ensemble"
         classifiers = [
             ("Random forest", random_forest(X_train=X_train, X_validate=X_validate, y_train=y_train, y_validate=y_validate, tuning=tuning, log=log)),
-            ("Naive Bayes", naive_bayes(X_train=X_train, X_validate=X_validate, y_train=y_train, y_validate=y_validate, tuning=tuning, log=log)),
+            #("Naive Bayes", naive_bayes(X_train=X_train, X_validate=X_validate, y_train=y_train, y_validate=y_validate, tuning=tuning, log=log)),
             ("Logistic Regression", logistic_regression(X_train=X_train, X_validate=X_validate, y_train=y_train, y_validate=y_validate, tuning=tuning, log=log)),
             ("MLP", multilayer_perceptron(X_train=X_train, X_validate=X_validate, y_train=y_train, y_validate=y_validate, tuning=tuning, log=log)),
             ("KNN", knn(X_train=X_train, X_validate=X_validate, y_train=y_train, y_validate=y_validate, tuning=tuning, log=log)),

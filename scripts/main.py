@@ -5,6 +5,7 @@ import parsing
 import classification
 import evaluation
 from feature_engineering import nan_treatment, encoding, sampling, anomalies_treatment, PCA
+from tests import feature_screening
 from Timer import Timer
 
 
@@ -13,9 +14,12 @@ if __name__ == "__main__":
     P A R A M E T E R S
     '''
     # behavioural parameters
-    read_preprocessed_files = False # skip the feature engineering part
     log = True # choose to show logs of many important operations into the console
     columns_threshold, rows_threshold = 0.5, 0.1 # max null values for not being dropped
+
+    read_preprocessed_files = False  # skip the feature engineering part
+    do_PCA = False
+    do_merge = True
 
     # paths
     data_path, logs_path, imgs_path = "../../data/", "../../logs/", "../imgs"
@@ -36,6 +40,9 @@ if __name__ == "__main__":
         df_test_original = parsing.parse_CSV_to_df(file_path=file_path_test, log=log)
         df_train, df_test = df_train_original.copy(), df_test_original.copy()
 
+        anomalies_treatment.show_unique_values(df_train, file_path=logs_path + "unique_values.txt")
+        #feature_screening.plot_column_hists(df_train, column="AMT_INCOME_TOTAL", img_path=imgs_path + "/df_train_hist_col.png")
+
         # removing useless columns and rows
         df_train, dropped_cols = nan_treatment.remove_columns(df=df_train, threshold=columns_threshold, log=log)
         df_train = nan_treatment.remove_rows(df=df_train, threshold=rows_threshold, log=log)
@@ -52,11 +59,11 @@ if __name__ == "__main__":
         df_validate = pd.concat([df_validate, df_train], sort=False)
         df_validate, _ = sampling.undersample(df_validate, log=False)
 
+
         # merging with other dataframes
         old_cols = set(df_train.columns)
-        print(df_test.shape)
-        df_train, df_validate, df_test = parsing.merge_dfs(dfs=[df_train, df_validate, df_test], data_path=data_path, log=log)
-        print(df_test.shape)
+        if do_merge:
+            df_train, df_validate, df_test = parsing.merge_dfs(dfs=[df_train, df_validate, df_test], data_path=data_path, log=log)
 
         # removing IDs
         df_train = anomalies_treatment.remove_ids(df_train)
@@ -87,12 +94,13 @@ if __name__ == "__main__":
         df_train["TARGET"], df_validate["TARGET"] = target_train, target_validate
 
         # imputing missing values
-        df_train = nan_treatment.impute_missing_values(df_train, mode="knn", log=log)
-        df_validate = nan_treatment.impute_missing_values(df_validate, mode="knn", log=log)
-        df_test = nan_treatment.impute_missing_values(df_test, mode="knn", log=log)
+        df_train = nan_treatment.impute_missing_values(df_train, mode="simple", log=log)
+        df_validate = nan_treatment.impute_missing_values(df_validate, mode="simple", log=log)
+        df_test = nan_treatment.impute_missing_values(df_test, mode="simple", log=log)
 
-        # PCA:
-        df_train, df_validate, df_test = PCA.pca_transform(df_train, [df_train, df_validate, df_test])
+        # PCA
+        if do_PCA:
+            df_train, df_validate, df_test = PCA.pca_transform(df_train, [df_train, df_validate, df_test], log=log)
 
         # saves the dataframes to files
         parsing.write_df_to_file(df_train, df_train_preprocessed_path, log=log)
@@ -114,7 +122,7 @@ if __name__ == "__main__":
     #y_validate_pred, proba = classification.predict(X_train=X_train, X_test=X_validate, X_validate=X_validate, y_train=y_train,
                                                         #y_validate=y_validate, mode="logistic", tuning=False, log=log)
     y_test_pred, proba = classification.predict(X_train=X_train, X_test=X_test, X_validate=X_validate, y_train=y_train, \
-                                            y_validate=y_validate, mode="ensemble", tuning=True, log=log)
+                                            y_validate=y_validate, mode="logistic", tuning=False, log=log)
     #evaluation.get_confusion_matrix(y_validate, y_validate_pred)
     #evaluation.get_classification_report(y_validate, y_validate_pred, imgs_path)
     #evaluation.get_roc_auc(y_validate, y_validate_pred, proba, imgs_path)
