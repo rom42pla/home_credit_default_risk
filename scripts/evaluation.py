@@ -3,20 +3,20 @@ import matplotlib.pyplot as plt
 
 from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.ensemble import ExtraTreesClassifier
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, auc, roc_curve
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, auc, roc_curve, roc_auc_score
 
 def get_classification_report(y_true, y_pred, imgs_path):
     report = classification_report(y_true, y_pred, target_names=["Not at risk", "At risk"], digits=4)
-    print(report)
+    print(f"Classification report:\n{report}")
 
     scores_names, scores = ["accuracy", "precision", "recall", "f1", "auc"], \
                            [accuracy_score(y_true, y_pred),
                             precision_score(y_true, y_pred),
                             recall_score(y_true, y_pred),
                             f1_score(y_true, y_pred),
-                            auc(y_true, y_pred) ]
+                            roc_auc_score(y_true, y_pred) ]
     fig = plt.figure()
-    plt.title('ROC')
+    plt.title('Classification report')
     x = np.arange(len(scores))
     plt.bar(x, height=scores)
     plt.xticks(x, scores_names)
@@ -27,27 +27,37 @@ def get_classification_report(y_true, y_pred, imgs_path):
     fig.savefig(imgs_path + '/classification_report.png', dpi=fig.dpi)
     return scores_names, scores
 
-def printConfusionMatrix(y_test, y_pred):
-    tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel()
-    print(f"\tTN:\t{tn}\tFP:\t{fp}\n\tFN:\t{fn}\tTP:\t{tp}\t")
+def get_confusion_matrix(y_true, y_pred):
+    tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
+    print(f"Confusion matrix:\n\tTN:\t{tn}\tFP:\t{fp}\n\tFN:\t{fn}\tTP:\t{tp}")
     return tn, fp, fn, tp
 
-def featureImportance(X, y, featureNames):
-    forest = ExtraTreesClassifier(n_estimators=250, random_state=0)
+def features_importance(X, y, feature_names, imgs_path, max_features=10):
+    forest = ExtraTreesClassifier(n_estimators=100)
     forest.fit(X, y)
     importances = forest.feature_importances_
     std = np.std([tree.feature_importances_ for tree in forest.estimators_], axis=0)
-    featuresOrder = list(np.argsort(importances)[::-1])
-    importances = importances[featuresOrder]
+    features_order = list(np.argsort(importances)[::-1])
+    importances = importances[features_order]
 
-    for i, featureIndex in enumerate(featuresOrder):
-        featuresOrder[i] = featureNames[featureIndex]
+    for i, feature_index in enumerate(features_order):
+        features_order[i] = feature_names[feature_index]
+    print(f"Most important features:\n\t{features_order[:max_features]}")
 
+    fig = plt.figure()
+    plt.title('Features importance')
+    x = np.arange(len(features_order[:max_features]))
+    plt.bar(x, height=importances[:max_features])
+    plt.xticks(x, features_order[:max_features])
+    plt.legend(loc='lower right')
+    plt.ylabel('score')
+    plt.xlabel('features')
+    fig.savefig(imgs_path + '/features_importance.png', dpi=fig.dpi)
     # plots feature importances
     #images.plotBarChart(x=featuresOrder, y=importances, title="Feature importances", textSize=8)
     #images.plotBarChart(x=featuresOrder[:20], y=importances[:20], title="Feature importances (top 20)", textSize=8)
 
-    return featuresOrder, importances
+    return features_order, importances
 
 def count_values(df, column):
     return df.loc[:, column].value_counts()
