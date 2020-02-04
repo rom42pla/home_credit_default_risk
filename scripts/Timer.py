@@ -7,27 +7,16 @@ class Timer:
 
         :param log:
         """
-        print(log.strip().capitalize() + "...")
+        print(log.strip()[0].capitalize() + log.strip()[1:] + "...")
         self.restart_timer()
 
     def restart_timer(self):
-        """
-
-        """
         self.time = time.time()
 
     def get_elapsed_time(self):
-        """
-
-        :return:
-        """
         return time.time() - self.time
 
     def get_human_readable_elapsed_time(self):
-        """
-
-        :return:
-        """
         elapsed_time = self.get_elapsed_time()
         if elapsed_time < 120:
             return str('%.2f' % (time.time() - self.time)) + " seconds"

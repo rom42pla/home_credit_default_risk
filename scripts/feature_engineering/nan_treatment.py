@@ -73,6 +73,7 @@ def impute_missing_values(df, mode="simple", columns=None, log=False):
     if columns == None:
         df_to_impute = df
     else:
+        columns = list(set(columns) & set(df.columns))
         df_to_impute = df[columns]
 
     if "TARGET" in df_to_impute.columns:
@@ -84,19 +85,27 @@ def impute_missing_values(df, mode="simple", columns=None, log=False):
 
     if mode.lower().strip() == "simple 0":
         X_pred = SimpleImputer(strategy="constant", fill_value=0).fit_transform(X)
+
     elif mode.lower().strip() == "simple median":
         X_pred = SimpleImputer(strategy="median", copy=False).fit_transform(X)
+
     elif mode.lower().strip() == "simple mean":
         X_pred = SimpleImputer(strategy="mean", copy=False).fit_transform(X)
+
+    elif mode.lower().strip() == "simple most common":
+        X_pred = SimpleImputer(strategy="most_frequent", copy=False).fit_transform(X)
+
     elif mode.lower().strip() == "iterative":
         X_pred = IterativeImputer().fit_transform(X)
+
     elif mode.lower().strip() == "knn":
         X_pred_splits = np.array_split(X, 4)
         for i, X_pred_split in enumerate(X_pred_splits):
             X_pred_splits[i] = KNNImputer().fit_transform(X_pred_split)
         X_pred = np.concatenate(X_pred_splits, axis=0)
+
     else:
-        raise Exception(f'Unrecognized mode f{mode.strip()}.\nOnly supported modes are "simple", "iterative", "knn"')
+        raise Exception(f'Unrecognized mode f{mode.strip()}.\nOnly supported modes are "simple 0", "simple mean", "simple median", "simple most common", "iterative", "knn"')
 
     if columns == None:
         df_new = pd.DataFrame(columns=old_cols_wo_TARGET, data=X_pred)

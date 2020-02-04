@@ -36,7 +36,7 @@ def parse_CSV_to_df(file_path, lines_cap=None, log=False):
     return reduce_dataframe_size(df.infer_objects())
 
 
-def write_df_to_file(df, file_path, index=False, log=False):
+def write_df_to_file(df, file_path, index=False, header=True, log=False):
     """
     :param df:
         Pandas' dataframe being written to a file
@@ -47,12 +47,12 @@ def write_df_to_file(df, file_path, index=False, log=False):
         section_timer = Timer(
             log=f"writing file {file_path}")
 
-    df.to_csv(path_or_buf=file_path, index=index, sep=",")
+    df.to_csv(path_or_buf=file_path, index=index, header=header, sep=",")
 
     if log:
         section_timer.end_timer(log=f"written a dataframe of {df.shape[0]} rows and {df.shape[1]} features")
 
-def merge_dfs(dfs, data_path, log=False):  # to join all the other dataframes.
+def merge_dfs(dfs, data_path, groupby_mode="mean", log=False):  # to join all the other dataframes.
     """
     Merges the dataframe to the original one, to have a dataframe complete with all the information.
     :param original_dataframe:
@@ -77,7 +77,7 @@ def merge_dfs(dfs, data_path, log=False):  # to join all the other dataframes.
 
     return [reduce_dataframe_size(df) for df in dfs]
 
-def __joining_minor_csvs(data_path, log=False):  # to join all the other dataframes.
+def __joining_minor_csvs(data_path, groupby_mode="mean", log=False):  # to join all the other dataframes.
     """
     Merges the bureau and previous_application to all their lower levels dataframes.
     :param data_path:
@@ -97,11 +97,25 @@ def __joining_minor_csvs(data_path, log=False):  # to join all the other datafra
     bur_balance = pd.read_csv(data_path + "bureau_balance.csv")  # the dataframe to add to the old one
     bur_balance = anomalies_treatment.correct_nan_values(bur_balance, log=False)
     bur_balance, _ = nan_treatment.remove_columns(df=bur_balance, threshold=0.5, log=log)
-    bur_balance = encoding.frequency_encoding(bur_balance).groupby("SK_ID_BUREAU", as_index=False).mean()
+    if groupby_mode == "mean":
+        bur_balance = encoding.frequency_encoding(bur_balance).groupby("SK_ID_BUREAU", as_index=False).mean()
+    elif groupby_mode == "sum":
+        bur_balance = encoding.frequency_encoding(bur_balance).groupby("SK_ID_BUREAU", as_index=False).sum()
+    elif groupby_mode == "mode":
+        bur_balance = encoding.frequency_encoding(bur_balance).groupby("SK_ID_BUREAU", as_index=False).mode()
+    else:
+        raise ValueError("Only recognized mode are 'sum' and 'mean'")
 
     bureau = pd.merge(left=bureau, right=bur_balance, how='left', on="SK_ID_BUREAU",
                       left_index=True)  # merging the dataframes
-    bureau = bureau.groupby("SK_ID_CURR", as_index=False).mean()
+    if groupby_mode == "mean":
+        bureau = bureau.groupby("SK_ID_CURR", as_index=False).mean()
+    elif groupby_mode == "sum":
+        bureau = bureau.groupby("SK_ID_CURR", as_index=False).sum()
+    elif groupby_mode == "mode":
+        bureau = bureau.groupby("SK_ID_CURR", as_index=False).mode()
+    else:
+        raise ValueError("Only recognized mode are 'sum' and 'mean'")
 
     # ------------------ previous_application -------------------------------
 
@@ -121,13 +135,27 @@ def __joining_minor_csvs(data_path, log=False):  # to join all the other datafra
         df_to_join = anomalies_treatment.correct_nan_values(df_to_join)
         df_to_join, _ = nan_treatment.remove_columns(df=df_to_join, threshold=0.5, log=False)
         df_to_join = encoding.frequency_encoding(df_to_join)
-        df_to_join = df_to_join.groupby(key, as_index=False).mean()
+        if groupby_mode == "mean":
+            df_to_join = df_to_join.groupby(key, as_index=False).mean()
+        elif groupby_mode == "sum":
+            df_to_join = df_to_join.groupby(key, as_index=False).sum()
+        elif groupby_mode == "mode":
+            df_to_join = df_to_join.groupby(key, as_index=False).mode()
+        else:
+            raise ValueError("Only recognized mode are 'sum' and 'mean'")
+
 
         prev_application = pd.merge(left=prev_application, right=df_to_join, how='left', on=key,
                                     left_index=True)  # merging the dataframe to prev_application
 
-    # to have only one line for each SK_ID_CURR
-    prev_application = prev_application.groupby("SK_ID_CURR", as_index=False).mean()
+    if groupby_mode == "mean":
+        prev_application = prev_application.groupby("SK_ID_CURR", as_index=False).mean()
+    elif groupby_mode == "sum":
+        prev_application = prev_application.groupby("SK_ID_CURR", as_index=False).sum()
+    elif groupby_mode == "sum":
+        prev_application = prev_application.groupby("SK_ID_CURR", as_index=False).mean()
+    else:
+        raise ValueError("Only recognized mode are 'sum' and 'mean'")
 
     return bureau, prev_application
 

@@ -32,19 +32,6 @@ def correct_nan_values(df, file_path=None, log=False):
             elif len(unique_values) > 2:
                 df[col] = __check_single_sign_value(df[col], log=False)
 
-
-
-                ''''
-                min, max, mean = df[col].min(), df[col].max(), df[col].mean()
-                negative_values_count, positive_values_count = sum(n < 0 for n in df[col]), \
-                                                               sum(n > 0 for n in df[col])
-                if log:
-                    print(f"\tmin: {min}\tmax: {max}\tmean: {mean}\tstandard deviation: {'%.3f' % std}")
-                    print(
-                        f"\tnegative values: {negative_values_count} ({'%.4f'%((negative_values_count/n_values)*100)}%)"
-                        f"\tpositive values: {positive_values_count} ({'%.4f'%((positive_values_count/n_values)*100)}%)")
-                '''
-
     # writes to file
     if file_path != None:
         with open(file_path, "w") as fp:
