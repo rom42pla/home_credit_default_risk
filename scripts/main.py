@@ -18,9 +18,9 @@ if __name__ == "__main__":
     columns_threshold, rows_threshold = 0.5, 0.1 # max null values for not being dropped
     classifier = "logistic"
 
-    read_preprocessed_files = False  # skip the feature engineering part
-    do_PCA = True
+    read_preprocessed_files = True  # skip the feature engineering part
     do_merge = True
+    do_PCA = True
 
     # paths
     data_path, logs_path, imgs_path = "../../data/", "../../logs/", "../imgs"
@@ -99,10 +99,6 @@ if __name__ == "__main__":
         df_validate = nan_treatment.impute_missing_values(df_validate, mode="simple mean", log=log)
         df_test = nan_treatment.impute_missing_values(df_test, mode="simple mean", log=log)
 
-        # PCA
-        if do_PCA:
-            df_train, df_validate, df_test = PCA.pca_transform(df_train, [df_train, df_validate, df_test], log=log)
-
         # saves the dataframes to files
         parsing.write_df_to_file(df_train, df_train_preprocessed_path, log=log)
         parsing.write_df_to_file(df_validate, df_validate_preprocessed_path, log=log)
@@ -114,6 +110,9 @@ if __name__ == "__main__":
         df_validate = parsing.parse_CSV_to_df(file_path=df_validate_preprocessed_path, log=log)
         df_test = parsing.parse_CSV_to_df(file_path=df_test_preprocessed_path, log=log)
 
+    # PCA
+    if do_PCA:
+        df_train, df_validate, df_test = PCA.pca_transform(df_train, [df_train, df_validate, df_test], log=log)
     test_ids = parsing.parse_CSV_to_df(file_path=file_path_test, log=False)["SK_ID_CURR"]
     X_train, y_train = df_train.drop(columns=["TARGET"]).to_numpy(), df_train.loc[:, "TARGET"].to_numpy()
     X_validate, y_validate = df_validate.drop(columns=["TARGET"]).to_numpy(), df_validate.loc[:, "TARGET"].to_numpy()

@@ -97,11 +97,11 @@ def __joining_minor_csvs(data_path, log=False):  # to join all the other datafra
     bur_balance = pd.read_csv(data_path + "bureau_balance.csv")  # the dataframe to add to the old one
     bur_balance = anomalies_treatment.correct_nan_values(bur_balance, log=False)
     bur_balance, _ = nan_treatment.remove_columns(df=bur_balance, threshold=0.5, log=log)
-    bur_balance = encoding.frequency_encoding(bur_balance).groupby("SK_ID_BUREAU", as_index=False).sum()
+    bur_balance = encoding.frequency_encoding(bur_balance).groupby("SK_ID_BUREAU", as_index=False).mean()
 
     bureau = pd.merge(left=bureau, right=bur_balance, how='left', on="SK_ID_BUREAU",
                       left_index=True)  # merging the dataframes
-    bureau = bureau.groupby("SK_ID_CURR", as_index=False).sum()
+    bureau = bureau.groupby("SK_ID_CURR", as_index=False).mean()
 
     # ------------------ previous_application -------------------------------
 
@@ -121,13 +121,13 @@ def __joining_minor_csvs(data_path, log=False):  # to join all the other datafra
         df_to_join = anomalies_treatment.correct_nan_values(df_to_join)
         df_to_join, _ = nan_treatment.remove_columns(df=df_to_join, threshold=0.5, log=False)
         df_to_join = encoding.frequency_encoding(df_to_join)
-        df_to_join = df_to_join.groupby(key, as_index=False).sum()
+        df_to_join = df_to_join.groupby(key, as_index=False).mean()
 
         prev_application = pd.merge(left=prev_application, right=df_to_join, how='left', on=key,
                                     left_index=True)  # merging the dataframe to prev_application
 
     # to have only one line for each SK_ID_CURR
-    prev_application = prev_application.groupby("SK_ID_CURR", as_index=False).sum()
+    prev_application = prev_application.groupby("SK_ID_CURR", as_index=False).mean()
 
     return bureau, prev_application
 

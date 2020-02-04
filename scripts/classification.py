@@ -8,6 +8,7 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.metrics import f1_score, roc_auc_score
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import LinearSVC
+import lightgbm as lgb
 
 from Timer import Timer
 
@@ -55,14 +56,14 @@ def logistic_regression(X_train=None, X_validate=None, y_train=None, y_validate=
         bestScore, solver_best = 0, None
         for solver in ["liblinear", "lbfgs", "newton-cg", "saga"]:
             classifier = LogisticRegression(solver=solver, dual=False,
-                                            warm_start=True, max_iter=300, n_jobs=4, C=1).fit(X_train, y_train)
+                                            warm_start=True, max_iter=1000, n_jobs=4, C=1).fit(X_train, y_train)
             score = roc_auc_score(y_validate, classifier.predict(X_validate))
             if (score > bestScore):
                 bestScore, solver_best = \
                     score, solver
         # choosing best parameters
         classifier = LogisticRegression(solver=solver_best, dual=False,
-                                        warm_start=True, max_iter=300, n_jobs=4, C=1)
+                                        warm_start=True, max_iter=1000, n_jobs=4, C=1)
         if log: section_timer.end_timer(log=f"done with a max score of {bestScore}")
     # default classifier
     else:
@@ -196,6 +197,24 @@ def predict(X_train, X_test, y_train, X_validate=None, y_validate=None, mode="en
         if log: section_timer = Timer(log=f"predicting using {classifier_name} classifier")
         classifier = adaboost(X_train=X_train, X_validate=X_validate, y_train=y_train, y_validate=y_validate, tuning=tuning,
                          log=log)
+
+    elif mode.lower().strip() in ["lgb", "lgbt"]:
+        classifier_name = "lgb"
+        if log: section_timer = Timer(log=f"predicting using {classifier_name} classifier")
+        lgb_train = lgb.Dataset(X_train, y_train)
+        lgb_eval = lgb.Dataset(X_test, reference=lgb_train)
+
+        params = {
+            'boosting_type': 'gbdt',
+            'objective': 'binary',
+            'n_jobs': 6,
+            'verbosity': 1
+        }
+
+        gbm = lgb.train(params, lgb_train, num_boost_round=20, valid_sets=lgb_eval, early_stopping_rounds=5)
+        y_pred = gbm.predict(X_test, num_iteration=gbm.best_iteration)
+        return y_pred, None
+
     else:
         raise Exception(f'Unrecognized mode f{mode.strip()}.\nOnly supported modes are "ensemble", "bayes", "logistic", "rf", "mlp", "knn"')
 
