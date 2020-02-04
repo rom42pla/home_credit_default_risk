@@ -1,5 +1,7 @@
 import pandas as pd
 import numpy as np
+import parsing
+
 from Timer import Timer
 
 from sklearn.experimental import enable_iterative_imputer
@@ -63,8 +65,10 @@ def align(df1, df2, log=False):
     return new_df1, new_df2
 
 def impute_missing_values(df, mode="simple", columns=None, log=False):
-    if log:
-        section_timer = Timer(log=f"imputing missing values")
+    if log: section_timer = Timer(log=f"imputing missing values")
+
+    if columns == []:
+        columns = None
 
     if columns == None:
         df_to_impute = df
@@ -72,12 +76,18 @@ def impute_missing_values(df, mode="simple", columns=None, log=False):
         df_to_impute = df[columns]
 
     if "TARGET" in df_to_impute.columns:
+        old_cols_wo_TARGET = df_to_impute.drop(columns=["TARGET"]).columns
         X, y = df_to_impute.drop(columns=["TARGET"]).to_numpy(), df_to_impute.loc[:, "TARGET"].to_numpy()
     else:
+        old_cols_wo_TARGET = df_to_impute.columns
         X = df_to_impute.to_numpy()
 
-    if mode.lower().strip() == "simple":
+    if mode.lower().strip() == "simple 0":
         X_pred = SimpleImputer(strategy="constant", fill_value=0).fit_transform(X)
+    elif mode.lower().strip() == "simple median":
+        X_pred = SimpleImputer(strategy="median", copy=False).fit_transform(X)
+    elif mode.lower().strip() == "simple mean":
+        X_pred = SimpleImputer(strategy="mean", copy=False).fit_transform(X)
     elif mode.lower().strip() == "iterative":
         X_pred = IterativeImputer().fit_transform(X)
     elif mode.lower().strip() == "knn":
@@ -89,17 +99,17 @@ def impute_missing_values(df, mode="simple", columns=None, log=False):
         raise Exception(f'Unrecognized mode f{mode.strip()}.\nOnly supported modes are "simple", "iterative", "knn"')
 
     if columns == None:
-        df_new = pd.DataFrame(data=X_pred)
+        df_new = pd.DataFrame(columns=old_cols_wo_TARGET, data=X_pred)
     else:
-        df_imputed, df_new = pd.DataFrame(columns=columns, data=X_pred), df
+        df_imputed, df_new = pd.DataFrame(columns=old_cols_wo_TARGET, data=X_pred), df
         df_new = df_new.drop(columns=list(df_imputed.columns))
         for col in df_imputed.columns:
             df_new[col] = df_imputed[col].to_numpy()
-
 
     if "TARGET" in df_to_impute.columns:
         df_new["TARGET"] = y
 
     if log:
         section_timer.end_timer(log=f"done")
-    return df_new
+
+    return parsing.reduce_dataframe_size(df_new, log=False)

@@ -1,14 +1,12 @@
 import pandas as pd
-
 from sklearn.decomposition import PCA
 from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import Normalizer
 
+from Timer import Timer
 
 def pca_transform(df_train, dfs_to_transform, log=False):
-    if log:
-        section_timer = Timer(
-            log=f"computing PCA")
+    if log: section_timer = Timer(log=f"computing PCA")
 
     if "TARGET" in df_train.columns:
         df_train, y_train = df_train.drop(columns=["TARGET"]), df_train.loc[:, "TARGET"].to_numpy().tolist()
@@ -17,7 +15,7 @@ def pca_transform(df_train, dfs_to_transform, log=False):
         if "TARGET" in df_to_transform.columns:
             dfs_to_transform[i], ys_to_transform[i] = df_to_transform.drop(columns=["TARGET"]), df_to_transform.loc[:, "TARGET"].to_numpy().tolist()
 
-    std_pca = make_pipeline(StandardScaler(), PCA(n_components=0.8)).fit(df_train)
+    std_pca = make_pipeline(Normalizer(), PCA(n_components=0.9, whiten=True)).fit(df_train)
 
     result = []
     for i, df_to_transform in enumerate(dfs_to_transform):

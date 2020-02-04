@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import os
 from Timer import Timer
-from feature_engineering import encoding, nan_treatment
+from feature_engineering import encoding, nan_treatment, anomalies_treatment
 import main
 
 
@@ -33,7 +33,7 @@ def parse_CSV_to_df(file_path, lines_cap=None, log=False):
     if log:
         section_timer.end_timer(log=f"parsed a dataframe of {df.shape[0]} rows and {df.shape[1]} features")
 
-    return df.infer_objects()
+    return reduce_dataframe_size(df.infer_objects())
 
 
 def write_df_to_file(df, file_path, index=False, log=False):
@@ -77,7 +77,7 @@ def merge_dfs(dfs, data_path, log=False):  # to join all the other dataframes.
 
     return [reduce_dataframe_size(df) for df in dfs]
 
-def __joining_minor_csvs(data_path):  # to join all the other dataframes.
+def __joining_minor_csvs(data_path, log=False):  # to join all the other dataframes.
     """
     Merges the bureau and previous_application to all their lower levels dataframes.
     :param data_path:
@@ -90,20 +90,25 @@ def __joining_minor_csvs(data_path):  # to join all the other dataframes.
 
     # add to bureau the lower level dataframe:
     bureau = pd.read_csv(data_path + "bureau.csv")  # the dataframe to add to the old one
-    bur_balance = pd.read_csv(data_path + "bureau_balance.csv")  # the dataframe to add to the old one
+    bureau = anomalies_treatment.correct_nan_values(bureau, log=False)
+    bureau, _ = nan_treatment.remove_columns(df=bureau, threshold=0.5, log=False)
     bureau = encoding.frequency_encoding(bureau)
-    bur_balance = encoding.frequency_encoding(bur_balance)
-    bur_balance = bur_balance.groupby("SK_ID_BUREAU").mean()
+
+    bur_balance = pd.read_csv(data_path + "bureau_balance.csv")  # the dataframe to add to the old one
+    bur_balance = anomalies_treatment.correct_nan_values(bur_balance, log=False)
+    bur_balance, _ = nan_treatment.remove_columns(df=bur_balance, threshold=0.5, log=log)
+    bur_balance = encoding.frequency_encoding(bur_balance).groupby("SK_ID_BUREAU", as_index=False).sum()
 
     bureau = pd.merge(left=bureau, right=bur_balance, how='left', on="SK_ID_BUREAU",
                       left_index=True)  # merging the dataframes
-    bureau = bureau.groupby("SK_ID_CURR", as_index=False).mean()
-    bureau = reduce_dataframe_size(bureau)
+    bureau = bureau.groupby("SK_ID_CURR", as_index=False).sum()
 
     # ------------------ previous_application -------------------------------
 
     # add to previous_application the lower level dataframes:
     prev_application = pd.read_csv(data_path + "previous_application.csv")
+    prev_application = anomalies_treatment.correct_nan_values(prev_application)
+    prev_application, _ = nan_treatment.remove_columns(df=prev_application, threshold=0.5, log=False)
     prev_application = encoding.frequency_encoding(prev_application)
 
     # csv names and keys of the lower level dataframes
@@ -113,16 +118,16 @@ def __joining_minor_csvs(data_path):  # to join all the other dataframes.
     for csv_name, key in csvs_to_add:  # merging each dataframe to prev_application
         # deleting the SK_ID_CURR, we have it in the prev_application
         df_to_join = pd.read_csv(data_path + csv_name).drop(columns="SK_ID_CURR")  # the dataframe to add to the old one
-        # encoding, we want all columns as numeric before merging
+        df_to_join = anomalies_treatment.correct_nan_values(df_to_join)
+        df_to_join, _ = nan_treatment.remove_columns(df=df_to_join, threshold=0.5, log=False)
         df_to_join = encoding.frequency_encoding(df_to_join)
-        df_to_join = df_to_join.groupby(key, as_index=False).mean()
+        df_to_join = df_to_join.groupby(key, as_index=False).sum()
 
         prev_application = pd.merge(left=prev_application, right=df_to_join, how='left', on=key,
                                     left_index=True)  # merging the dataframe to prev_application
 
     # to have only one line for each SK_ID_CURR
-    prev_application = prev_application.groupby("SK_ID_CURR", as_index=False).mean()
-    prev_application = reduce_dataframe_size(prev_application)
+    prev_application = prev_application.groupby("SK_ID_CURR", as_index=False).sum()
 
     return bureau, prev_application
 

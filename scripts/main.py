@@ -16,9 +16,10 @@ if __name__ == "__main__":
     # behavioural parameters
     log = True # choose to show logs of many important operations into the console
     columns_threshold, rows_threshold = 0.5, 0.1 # max null values for not being dropped
+    classifier = "logistic"
 
     read_preprocessed_files = False  # skip the feature engineering part
-    do_PCA = False
+    do_PCA = True
     do_merge = True
 
     # paths
@@ -40,8 +41,9 @@ if __name__ == "__main__":
         df_test_original = parsing.parse_CSV_to_df(file_path=file_path_test, log=log)
         df_train, df_test = df_train_original.copy(), df_test_original.copy()
 
-        anomalies_treatment.show_unique_values(df_train, file_path=logs_path + "unique_values.txt")
-        #feature_screening.plot_column_hists(df_train, column="AMT_INCOME_TOTAL", img_path=imgs_path + "/df_train_hist_col.png")
+        # removing anomalies
+        df_train = anomalies_treatment.correct_nan_values(df_train, log=log)
+        df_test = anomalies_treatment.correct_nan_values(df_test, log=log)
 
         # removing useless columns and rows
         df_train, dropped_cols = nan_treatment.remove_columns(df=df_train, threshold=columns_threshold, log=log)
@@ -51,14 +53,13 @@ if __name__ == "__main__":
         # one-hot encoding
         first_test_element = df_train.shape[0]
         concatenated_dfs = pd.concat([df_train, df_test], sort=False)
-        concatenated_dfs = encoding.frequency_encoding(concatenated_dfs)
+        concatenated_dfs = encoding.frequency_encoding(concatenated_dfs, log=log)
         df_train, df_test = concatenated_dfs.iloc[:first_test_element, :], concatenated_dfs.iloc[first_test_element:, :].drop(columns=["TARGET"])
 
         # undersampling and creating a validation set
         df_train, df_validate = sampling.undersample(df_train, log=log)
         df_validate = pd.concat([df_validate, df_train], sort=False)
         df_validate, _ = sampling.undersample(df_validate, log=False)
-
 
         # merging with other dataframes
         old_cols = set(df_train.columns)
@@ -79,9 +80,9 @@ if __name__ == "__main__":
         for col in df_train.columns:
             if not col in old_cols:
                 new_cols.append(col)
-        df_train = nan_treatment.impute_missing_values(df_train, mode="simple", columns=new_cols, log=log)
-        df_validate = nan_treatment.impute_missing_values(df_validate, mode="simple", columns=new_cols, log=log)
-        df_test = nan_treatment.impute_missing_values(df_test, mode="simple", columns=new_cols, log=log)
+        df_train = nan_treatment.impute_missing_values(df_train, mode="simple 0", columns=new_cols, log=log)
+        df_validate = nan_treatment.impute_missing_values(df_validate, mode="simple 0", columns=new_cols, log=log)
+        df_test = nan_treatment.impute_missing_values(df_test, mode="simple 0", columns=new_cols, log=log)
 
         # removing useless columns and rows
         df_train, dropped_cols = nan_treatment.remove_columns(df=df_train, threshold=columns_threshold, log=log)
@@ -94,9 +95,9 @@ if __name__ == "__main__":
         df_train["TARGET"], df_validate["TARGET"] = target_train, target_validate
 
         # imputing missing values
-        df_train = nan_treatment.impute_missing_values(df_train, mode="simple", log=log)
-        df_validate = nan_treatment.impute_missing_values(df_validate, mode="simple", log=log)
-        df_test = nan_treatment.impute_missing_values(df_test, mode="simple", log=log)
+        df_train = nan_treatment.impute_missing_values(df_train, mode="simple mean", log=log)
+        df_validate = nan_treatment.impute_missing_values(df_validate, mode="simple mean", log=log)
+        df_test = nan_treatment.impute_missing_values(df_test, mode="simple mean", log=log)
 
         # PCA
         if do_PCA:
@@ -122,14 +123,14 @@ if __name__ == "__main__":
     #y_validate_pred, proba = classification.predict(X_train=X_train, X_test=X_validate, X_validate=X_validate, y_train=y_train,
                                                         #y_validate=y_validate, mode="logistic", tuning=False, log=log)
     y_test_pred, proba = classification.predict(X_train=X_train, X_test=X_test, X_validate=X_validate, y_train=y_train, \
-                                            y_validate=y_validate, mode="logistic", tuning=False, log=log)
+                                            y_validate=y_validate, mode=classifier, tuning=True, log=log)
     #evaluation.get_confusion_matrix(y_validate, y_validate_pred)
     #evaluation.get_classification_report(y_validate, y_validate_pred, imgs_path)
     #evaluation.get_roc_auc(y_validate, y_validate_pred, proba, imgs_path)
     #evaluation.features_importance(X_validate, y_validate, features, imgs_path)
 
     df_submission = pd.DataFrame(columns=["SK_ID_CURR"])
-    print(test_ids.shape, len(y_test_pred))
     df_submission["SK_ID_CURR"], df_submission["TARGET"] = test_ids, y_test_pred
     parsing.write_df_to_file(df=df_submission, file_path=submission_path, log=log)
+
     if log: total_timer.end_timer(log=f"everything done")
