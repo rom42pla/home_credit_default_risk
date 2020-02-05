@@ -10,18 +10,34 @@ from Timer import Timer
 
 
 if __name__ == "__main__":
+    logging.getLogger().setLevel(logging.CRITICAL)
     '''
-    P A R A M E T E R S
+    ////////////////////////
+    P A R A M E T E R S ////
+    ////////////////////////
     '''
     # behavioural parameters
     log = True # choose to show logs of many important operations into the console
-    columns_threshold, rows_threshold = 0.5, 0.1 # max null values for not being dropped
-    groupby_mode = "mean"
-    classifier = "regression"
 
-    read_merged_files = False  # skip the feature engineering part
+    # nan treatment parameters
+    columns_threshold, rows_threshold = 0.4, 0.1  # max null values for not being dropped
+
+    # sampling parameters
+    sampling_mode = "undersampling"
+
+    # merge parameters
+    read_merged_files = True  # skip the feature engineering part
+    groupby_mode = "mean"
     do_merge = True
+
+    # PCA/FAMD parameters
+    just_one_hot = False  # switch between one-hot and frequency encoding
     do_PCA = True
+
+    # machine learning parameters
+    classifier = "regression"
+    hyperparameters_tuning = True
+    predict_probabilities = True
 
     # paths
     data_path, logs_path, imgs_path = "../../data/", "../../logs/", "../imgs"
@@ -32,15 +48,17 @@ if __name__ == "__main__":
     submission_path = logs_path + "submission.csv"
 
     '''
-    P R O G R A M
+    //////////////////////////
+    F E A T U R E ////////////
+    E N G I N E E R I N G ////
+    //////////////////////////
     '''
-    logging.getLogger().setLevel(logging.CRITICAL)
     if log: total_timer = Timer(log=f"starting FDS 2019/20 project")
+
     if not read_merged_files:
         # retrieving data from the .csv(s)
-        df_train_original = parsing.parse_CSV_to_df(file_path=file_path_train, log=log)
-        df_test_original = parsing.parse_CSV_to_df(file_path=file_path_test, log=log)
-        df_train, df_test = df_train_original.copy(), df_test_original.copy()
+        df_train = parsing.parse_CSV_to_df(file_path=file_path_train, log=log)
+        df_test = parsing.parse_CSV_to_df(file_path=file_path_test, log=log)
 
         # removing anomalies
         df_train = anomalies_treatment.correct_nan_values(df_train, log=log)
@@ -49,91 +67,103 @@ if __name__ == "__main__":
         # removing useless columns and rows
         df_train, dropped_cols = nan_treatment.remove_columns(df=df_train, threshold=columns_threshold, log=log)
         df_train = nan_treatment.remove_rows(df=df_train, threshold=rows_threshold, log=log)
-        df_train, df_test = nan_treatment.align(df_train, df_test, log=log)
+        target = df_train["TARGET"]
+        df_train = df_train.drop(columns=["TARGET"])
+        df_train, df_test = nan_treatment.align_left(df_train, df_test, log=log)
 
         # one-hot encoding
         first_test_element = df_train.shape[0]
         concatenated_dfs = pd.concat([df_train, df_test], sort=False)
-        concatenated_dfs = encoding.frequency_encoding(concatenated_dfs, log=log)
-        df_train, df_test = concatenated_dfs.iloc[:first_test_element, :], concatenated_dfs.iloc[first_test_element:, :].drop(columns=["TARGET"])
+        concatenated_dfs = encoding.frequency_encoding(concatenated_dfs, just_one_hot=just_one_hot, log=log)
+        df_train, df_test = concatenated_dfs.iloc[:first_test_element, :], \
+                            concatenated_dfs.iloc[first_test_element:, :]
 
-        # undersampling and creating a validation set
-        df_train, df_validate = sampling.undersample(df_train, log=log)
-        df_validate = pd.concat([df_validate, df_train], sort=False)
-        df_validate, _ = sampling.undersample(df_validate, log=False)
+        # under/oversampling and creating a validation set
+        df_train = pd.concat([df_train, target], axis=1, join="inner")
+        if sampling_mode in ["oversample", "oversampling", "over sampling"]:
+            df_train = sampling.oversample(df_train, log=log)
+        else:
+            df_train = sampling.undersample(df_train, log=log)
+        target = df_train["TARGET"]
 
         # merging with other dataframes
         old_cols = set(df_train.columns)
         if do_merge:
-            df_train, df_validate, df_test = parsing.merge_dfs(dfs=[df_train, df_validate, df_test],
-                                                               data_path=data_path, groupby_mode=groupby_mode, log=log)
+            df_train, df_test = parsing.merge_dfs(dfs=[df_train, df_test],
+                                                  just_one_hot=just_one_hot, data_path=data_path,
+                                                  groupby_mode=groupby_mode, log=log)
 
         # saves the dataframes to files
-        parsing.write_df_to_file(pd.DataFrame(data=old_cols), cols_before_merge_path, header=False, log=log)
+        parsing.write_df_to_file(pd.DataFrame(data=old_cols), cols_before_merge_path, header=False, log=False)
         parsing.write_df_to_file(df_train, df_train_preprocessed_path, log=log)
-        parsing.write_df_to_file(df_validate, df_validate_preprocessed_path, log=log)
+        #parsing.write_df_to_file(df_validate, df_validate_preprocessed_path, log=log)
         parsing.write_df_to_file(df_test, df_test_preprocessed_path, log=log)
 
     else:
         # reads dataframes backups
-        old_cols = parsing.parse_CSV_to_df(file_path=cols_before_merge_path, log=log).iloc[:, 0].tolist()
+        old_cols = parsing.parse_CSV_to_df(file_path=cols_before_merge_path, log=False).iloc[:, 0].tolist()
         df_train = parsing.parse_CSV_to_df(file_path=df_train_preprocessed_path, log=log)
-        df_validate = parsing.parse_CSV_to_df(file_path=df_validate_preprocessed_path, log=log)
+        #df_validate = parsing.parse_CSV_to_df(file_path=df_validate_preprocessed_path, log=log)
         df_test = parsing.parse_CSV_to_df(file_path=df_test_preprocessed_path, log=log)
 
     # removing IDs
     df_train = anomalies_treatment.remove_ids(df_train)
-    df_validate = anomalies_treatment.remove_ids(df_validate)
+    #df_validate = anomalies_treatment.remove_ids(df_validate)
     df_test = anomalies_treatment.remove_ids(df_test)
 
     # removing infinites
-    df_train = anomalies_treatment.remove_infs(df_validate)
-    df_validate = anomalies_treatment.remove_ids(df_validate)
+    df_train = anomalies_treatment.remove_infs(df_train)
+    #df_validate = anomalies_treatment.remove_ids(df_validate)
     df_test = anomalies_treatment.remove_ids(df_test)
 
     new_cols = []
     for col in df_train.columns:
         if not col in old_cols:
             new_cols.append(col)
+    if "TARGET" in new_cols:
+        new_cols.remove("TARGET")
+
     df_train = nan_treatment.impute_missing_values(df_train, mode="simple 0", columns=new_cols, log=log)
-    df_validate = nan_treatment.impute_missing_values(df_validate, mode="simple 0", columns=new_cols, log=log)
+    #df_validate = nan_treatment.impute_missing_values(df_validate, mode="simple 0", columns=new_cols, log=log)
     df_test = nan_treatment.impute_missing_values(df_test, mode="simple 0", columns=new_cols, log=log)
 
-    # removing useless columns and rows
-    df_train, dropped_cols = nan_treatment.remove_columns(df=df_train, threshold=columns_threshold, log=log)
-    df_train = nan_treatment.remove_rows(df=df_train, threshold=rows_threshold, log=log)
-    target_train, target_validate = df_train["TARGET"], df_validate["TARGET"]
-    df_train, df_test = nan_treatment.align(df_train, df_test, log=False)
-    df_test, df_train = nan_treatment.align(df_test, df_train, log=False)
-    df_train, df_validate = nan_treatment.align(df_train, df_validate, log=False)
-    df_validate, df_train = nan_treatment.align(df_validate, df_train, log=False)
-    df_train["TARGET"], df_validate["TARGET"] = target_train, target_validate
+    # removing useless rows and columns
+    df_train = nan_treatment.remove_rows(df=df_train, threshold=rows_threshold, log=False)
+    #df_validate = nan_treatment.remove_rows(df=df_validate, threshold=rows_threshold, log=False)
+    df_train, _ = nan_treatment.remove_columns(df=df_train, threshold=columns_threshold, log=False)
+    #df_validate, _ = nan_treatment.remove_columns(df=df_validate, threshold=columns_threshold, log=False)
+    df_test, _ = nan_treatment.remove_columns(df=df_test, threshold=columns_threshold, log=False)
 
     # imputing missing values
     df_train = nan_treatment.impute_missing_values(df_train, mode="simple mean", log=log)
-    df_validate = nan_treatment.impute_missing_values(df_validate, mode="simple mean", log=log)
+    #df_validate = nan_treatment.impute_missing_values(df_validate, mode="simple mean", log=log)
     df_test = nan_treatment.impute_missing_values(df_test, mode="simple mean", log=log)
+
+    y_train = df_train.loc[:, "TARGET"].to_numpy()
+    df_test, df_train = nan_treatment.align_left(df_test, df_train, log=False)
+    df_train["TARGET"] = y_train
 
     # PCA
     if do_PCA:
-        df_train, df_validate, df_test = PCA.pca_transform(df_train, [df_train, df_validate, df_test], log=log)
+        df_train, df_test = PCA.pca_transform(df_train, [df_train, df_test], log=log)
+
+    '''
+    ////////////////////////
+    P R E D I C T I O N ////
+    ////////////////////////
+    '''
     test_ids = parsing.parse_CSV_to_df(file_path=file_path_test, log=False)["SK_ID_CURR"]
-    X_train, y_train = df_train.drop(columns=["TARGET"]).to_numpy(), df_train.loc[:, "TARGET"].to_numpy()
-    X_validate, y_validate = df_validate.drop(columns=["TARGET"]).to_numpy(), df_validate.loc[:, "TARGET"].to_numpy()
+    X_train = df_train.drop(columns=["TARGET"]).to_numpy()
     X_test = df_test.to_numpy()
-
     features = list(df_test.columns)
-    #y_validate_pred, proba = classification.predict(X_train=X_train, X_test=X_validate, X_validate=X_validate, y_train=y_train,
-                                                        #y_validate=y_validate, mode="logistic", tuning=False, log=log)
-    y_test_pred, proba = classification.predict(X_train=X_train, X_test=X_test, X_validate=X_validate, y_train=y_train, \
-                                            y_validate=y_validate, mode=classifier, tuning=False, log=log)
-    #evaluation.get_confusion_matrix(y_validate, y_validate_pred)
-    #evaluation.get_classification_report(y_validate, y_validate_pred, imgs_path)
-    #evaluation.get_roc_auc(y_validate, y_validate_pred, proba, imgs_path)
-    #evaluation.features_importance(X_validate, y_validate, features, imgs_path)
 
-    df_submission = pd.DataFrame(columns=["SK_ID_CURR"])
+    y_test_pred, proba = classification.predict(X_train=X_train, X_test=X_test, X_validate=X_train, y_train=y_train,
+                                                y_validate=y_train, mode=classifier, tuning=hyperparameters_tuning,
+                                                probabilities=predict_probabilities, log=log)
+
+    df_submission = pd.DataFrame(columns=["SK_ID_CURR", "TARGET"])
     df_submission["SK_ID_CURR"], df_submission["TARGET"] = test_ids, y_test_pred
     parsing.write_df_to_file(df=df_submission, file_path=submission_path, log=log)
+    parsing.write_df_to_file(df=df_submission, file_path="../submission.csv", log=log)
 
     if log: total_timer.end_timer(log=f"everything done")

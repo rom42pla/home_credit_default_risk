@@ -8,6 +8,7 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.metrics import f1_score, roc_auc_score
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import LinearSVC
+
 import lightgbm as lgb
 
 from Timer import Timer
@@ -128,7 +129,7 @@ def adaboost(X_train=None, X_validate=None, y_train=None, y_validate=None, tunin
     classifier = AdaBoostClassifier(base_estimator=LogisticRegression(dual=False, max_iter=300, n_jobs=1),n_estimators=250)
     return classifier
 
-def predict(X_train, X_test, y_train, X_validate=None, y_validate=None, mode="ensemble", tuning=False, log=False):
+def predict(X_train, X_test, y_train, X_validate=None, y_validate=None, mode="ensemble", tuning=False, probabilities=True, log=False):
     # ensemble
     # https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.VotingClassifier.html
     if mode.lower().strip() in ["ensemble", "voting"]:
@@ -140,7 +141,7 @@ def predict(X_train, X_test, y_train, X_validate=None, y_validate=None, mode="en
             ("Logistic Regression", logistic_regression(X_train=X_train, X_validate=X_validate, y_train=y_train, y_validate=y_validate, tuning=tuning, log=log)),
             ("MLP", multilayer_perceptron(X_train=X_train, X_validate=X_validate, y_train=y_train, y_validate=y_validate, tuning=tuning, log=log)),
             ("KNN", knn(X_train=X_train, X_validate=X_validate, y_train=y_train, y_validate=y_validate, tuning=tuning, log=log)),
-            ("SVM", svm(X_train=X_train, X_validate=X_validate, y_train=y_train, y_validate=y_validate, tuning=tuning, log=log)),
+            #("SVM", svm(X_train=X_train, X_validate=X_validate, y_train=y_train, y_validate=y_validate, tuning=tuning, log=log)),
             ("AdaBoost", adaboost(X_train=X_train, X_validate=X_validate, y_train=y_train, y_validate=y_validate, tuning=tuning,
                          log=log))
             ]
@@ -213,13 +214,18 @@ def predict(X_train, X_test, y_train, X_validate=None, y_validate=None, mode="en
 
         gbm = lgb.train(params, lgb_train, num_boost_round=20, valid_sets=lgb_eval, early_stopping_rounds=5)
         y_pred = gbm.predict(X_test, num_iteration=gbm.best_iteration)
+
+        if log: section_timer.end_timer(log=f"done")
         return y_pred, None
 
     else:
         raise Exception(f'Unrecognized mode f{mode.strip()}.\nOnly supported modes are "ensemble", "bayes", "logistic", "rf", "mlp", "knn"')
 
     # prediction
-    y_pred = classifier.fit(X_train, y_train).predict(X_test)
+    if probabilities:
+        y_pred = classifier.fit(X_train, y_train).predict_proba(X_test)[:, 1]
+    else:
+        y_pred = classifier.fit(X_train, y_train).predict(X_test)
     if classifier_name not in ["SVM"]:
         proba = classifier.predict_proba(X_test)
     else:

@@ -2,7 +2,7 @@ import pandas as pd
 from Timer import Timer
 
 
-def frequency_encoding(df, log=False):
+def frequency_encoding(df, just_one_hot=False, log=False):
     """
     encodes the dataframe with the frequencies on the categorical features.
     :param df: dataframe to be encoded
@@ -10,11 +10,15 @@ def frequency_encoding(df, log=False):
     :return: encoded dataframe
     """
     if log: section_timer = Timer(log=f"frequency encoding a dataframe with shape {df.shape}")
+
+    # does a one-hot encoding
     old_cols = set(df.columns)
     df = pd.get_dummies(df)
-    new_cols = list(set(df.columns) - old_cols)
-    for col in new_cols:
-        df[col] = (df[col] * (df[col].sum() / df.shape[0])).astype("float64")
+
+    # eventually do the frequency encoding
+    if not just_one_hot:
+        for col in list(set(df.columns) - old_cols):
+            df[col] = (df[col] * (df[col].sum() / df.shape[0]))
 
     if log: section_timer.end_timer(log=f"done")
     return df
