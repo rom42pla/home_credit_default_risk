@@ -5,7 +5,6 @@ import parsing
 import classification
 import evaluation
 from feature_engineering import nan_treatment, encoding, sampling, anomalies_treatment, PCA
-from tests import feature_screening
 from Timer import Timer
 
 
@@ -17,7 +16,7 @@ if __name__ == "__main__":
     ////////////////////////
     '''
     # behavioural parameters
-    log = True # choose to show logs of many important operations into the console
+    log = True
 
     # nan treatment parameters
     columns_threshold, rows_threshold = 0.4, 0.1  # max null values for not being dropped
@@ -26,9 +25,9 @@ if __name__ == "__main__":
     sampling_mode = "undersampling"
 
     # merge parameters
-    read_merged_files = True  # skip the feature engineering part
-    groupby_mode = "mean"
+    read_merged_files = True   # skip the feature engineering part
     do_merge = True
+    groupby_mode = "mean"
 
     # PCA/FAMD parameters
     do_PCA = True
@@ -97,24 +96,20 @@ if __name__ == "__main__":
         # saves the dataframes to files
         parsing.write_df_to_file(pd.DataFrame(data=old_cols), cols_before_merge_path, header=False, log=False)
         parsing.write_df_to_file(df_train, df_train_preprocessed_path, log=log)
-        #parsing.write_df_to_file(df_validate, df_validate_preprocessed_path, log=log)
         parsing.write_df_to_file(df_test, df_test_preprocessed_path, log=log)
 
     else:
         # reads dataframes backups
         old_cols = parsing.parse_CSV_to_df(file_path=cols_before_merge_path, log=False).iloc[:, 0].tolist()
         df_train = parsing.parse_CSV_to_df(file_path=df_train_preprocessed_path, log=log)
-        #df_validate = parsing.parse_CSV_to_df(file_path=df_validate_preprocessed_path, log=log)
         df_test = parsing.parse_CSV_to_df(file_path=df_test_preprocessed_path, log=log)
 
     # removing IDs
     df_train = anomalies_treatment.remove_ids(df_train)
-    #df_validate = anomalies_treatment.remove_ids(df_validate)
     df_test = anomalies_treatment.remove_ids(df_test)
 
     # removing infinites
     df_train = anomalies_treatment.remove_infs(df_train)
-    #df_validate = anomalies_treatment.remove_ids(df_validate)
     df_test = anomalies_treatment.remove_ids(df_test)
 
     new_cols = []
@@ -124,30 +119,28 @@ if __name__ == "__main__":
     if "TARGET" in new_cols:
         new_cols.remove("TARGET")
 
+    # imputing missing values
     df_train = nan_treatment.impute_missing_values(df_train, mode="simple 0", columns=new_cols, log=log)
-    #df_validate = nan_treatment.impute_missing_values(df_validate, mode="simple 0", columns=new_cols, log=log)
     df_test = nan_treatment.impute_missing_values(df_test, mode="simple 0", columns=new_cols, log=log)
 
     # removing useless rows and columns
     df_train = nan_treatment.remove_rows(df=df_train, threshold=rows_threshold, log=False)
-    #df_validate = nan_treatment.remove_rows(df=df_validate, threshold=rows_threshold, log=False)
     df_train, _ = nan_treatment.remove_columns(df=df_train, threshold=columns_threshold, log=False)
-    #df_validate, _ = nan_treatment.remove_columns(df=df_validate, threshold=columns_threshold, log=False)
     df_test, _ = nan_treatment.remove_columns(df=df_test, threshold=columns_threshold, log=False)
 
     # imputing missing values
-    df_train = nan_treatment.impute_missing_values(df_train, mode="simple mean", log=log)
-    #df_validate = nan_treatment.impute_missing_values(df_validate, mode="simple mean", log=log)
-    df_test = nan_treatment.impute_missing_values(df_test, mode="simple mean", log=log)
+    df_train = nan_treatment.impute_missing_values(df_train, mode="simple median", log=log)
+    df_test = nan_treatment.impute_missing_values(df_test, mode="simple median", log=log)
 
     y_train = df_train.loc[:, "TARGET"].to_numpy()
     df_test, df_train = nan_treatment.align_left(df_test, df_train, log=False)
     df_train["TARGET"] = y_train
 
+    print(df_train["TARGET"])
     # PCA
     if do_PCA:
         df_train, df_test = PCA.pca_transform(df_train, [df_train, df_test], corr_threshold=features_corr_threshold, log=log)
-
+    print(df_train["TARGET"])
     '''
     ////////////////////////
     P R E D I C T I O N ////

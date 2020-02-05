@@ -105,7 +105,7 @@ def __joining_minor_csvs(data_path, groupby_mode="mean", just_one_hot=False, log
     if groupby_mode == "mean":
         bur_balance = bur_balance.groupby("SK_ID_BUREAU", as_index=False).mean()
     elif groupby_mode == "sum":
-        bur_balance = ebur_balance.groupby("SK_ID_BUREAU", as_index=False).sum()
+        bur_balance = bur_balance.groupby("SK_ID_BUREAU", as_index=False).sum()
     elif groupby_mode == "mode":
         bur_balance = bur_balance.groupby("SK_ID_BUREAU", as_index=False).mode()
     else:
@@ -120,7 +120,7 @@ def __joining_minor_csvs(data_path, groupby_mode="mean", just_one_hot=False, log
     elif groupby_mode == "mode":
         bureau = bureau.groupby("SK_ID_CURR", as_index=False).mode()
     else:
-        raise ValueError("Only recognized mode are 'sum' and 'mean'")
+        raise ValueError("Only recognized mode are 'sum', 'mean' and 'mode'")
 
     #--------------------------------#
     #------# prev_application #------#

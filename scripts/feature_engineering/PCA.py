@@ -28,7 +28,7 @@ def pca_transform(df_train, dfs_to_transform, corr_threshold=0.8, log=False):
     df_train, dfs_to_transform = df_train[selected_features], [df[selected_features] for df in dfs_to_transform]
 
     # PCA
-    pca = PCA(n_components=0.4, whiten=True).fit(df_train)
+    pca = PCA(whiten=True).fit(df_train)
     selected_components = list(df_train.columns)
 
     result = []
