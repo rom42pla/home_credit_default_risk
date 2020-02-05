@@ -57,7 +57,7 @@ def logistic_regression(X_train=None, X_validate=None, y_train=None, y_validate=
         bestScore, solver_best = 0, None
         for solver in ["liblinear", "lbfgs", "newton-cg", "saga"]:
             classifier = LogisticRegression(solver=solver, dual=False,
-                                            warm_start=True, max_iter=1000, n_jobs=4, C=1).fit(X_train, y_train)
+                                            warm_start=True, max_iter=500, n_jobs=4, C=1).fit(X_train, y_train)
             score = roc_auc_score(y_validate, classifier.predict(X_validate))
             if (score > bestScore):
                 bestScore, solver_best = \
@@ -68,7 +68,7 @@ def logistic_regression(X_train=None, X_validate=None, y_train=None, y_validate=
         if log: section_timer.end_timer(log=f"done with a max score of {bestScore}")
     # default classifier
     else:
-        classifier = LogisticRegression(dual=False, max_iter=300, n_jobs=4, C=1)
+        classifier = LogisticRegression(dual=False, max_iter=1000, n_jobs=4, C=1)
 
     return classifier
 

@@ -31,12 +31,13 @@ if __name__ == "__main__":
     do_merge = True
 
     # PCA/FAMD parameters
-    just_one_hot = False  # switch between one-hot and frequency encoding
     do_PCA = True
+    just_one_hot = False  # switch between one-hot and frequency encoding
+    features_corr_threshold = 0.7
 
     # machine learning parameters
     classifier = "regression"
-    hyperparameters_tuning = True
+    hyperparameters_tuning = False
     predict_probabilities = True
 
     # paths
@@ -145,7 +146,7 @@ if __name__ == "__main__":
 
     # PCA
     if do_PCA:
-        df_train, df_test = PCA.pca_transform(df_train, [df_train, df_test], log=log)
+        df_train, df_test = PCA.pca_transform(df_train, [df_train, df_test], corr_threshold=features_corr_threshold, log=log)
 
     '''
     ////////////////////////

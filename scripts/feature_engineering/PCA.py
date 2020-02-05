@@ -5,7 +5,7 @@ from sklearn.preprocessing import Normalizer
 
 from Timer import Timer
 
-def pca_transform(df_train, dfs_to_transform, log=False):
+def pca_transform(df_train, dfs_to_transform, corr_threshold=0.8, log=False):
     if log: section_timer = Timer(log=f"computing PCA")
 
     if "TARGET" in df_train.columns:
@@ -24,11 +24,11 @@ def pca_transform(df_train, dfs_to_transform, log=False):
     normalizer = Normalizer().fit_transform(df_train)
 
     # feature selection
-    selected_features = feature_selection_new(df=df_train, y_train=y_train, log=False)
+    selected_features = feature_selection_new(df=df_train, y_train=y_train, corr_threshold=corr_threshold, log=False)
     df_train, dfs_to_transform = df_train[selected_features], [df[selected_features] for df in dfs_to_transform]
 
     # PCA
-    pca = PCA(whiten=True).fit(df_train)
+    pca = PCA(n_components=0.4, whiten=True).fit(df_train)
     selected_components = list(df_train.columns)
 
     result = []
@@ -40,11 +40,11 @@ def pca_transform(df_train, dfs_to_transform, log=False):
             result[i]["TARGET"] = ys_to_transform[i]
 
     if log:
-        section_timer.end_timer(log=f"found {len(selected_components)} components")
+        section_timer.end_timer(log=f"found {len(df_train.columns)} components")
     return result
 
 
-def feature_selection_new(df, y_train=None, log=False):
+def feature_selection_new(df, y_train=None, corr_threshold=0.8, log=False):
     if log: section_timer = Timer(log=f"finding the features")
 
     if y_train != None:
@@ -53,9 +53,7 @@ def feature_selection_new(df, y_train=None, log=False):
         raise ValueError("Target missing in the dataframe")
 
     corr_series = abs(pd.Series(df.corr()["TARGET"]).drop("TARGET")).sort_values(ascending=False)
-    std = corr_series.std()
-    corr_series = corr_series[corr_series > std]
-    columns = corr_series.index.tolist()[:int(len(corr_series))]
+    columns = corr_series.index.tolist()[:int(len(corr_series) * corr_threshold)]
 
     if log:
         section_timer.end_timer(log=f"selected {len(columns)} (out of {len(df.columns)}) features")
