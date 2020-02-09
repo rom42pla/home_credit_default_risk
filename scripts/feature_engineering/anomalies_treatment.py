@@ -1,8 +1,21 @@
 import numpy as np
 from pprint import pprint
 import matplotlib.pyplot as plt
-from sklearn.preprocessing import StandardScaler
 from Timer import Timer
+import re
+
+
+def remove_useless_columns(df, log=False):
+    if log: section_timer = Timer(log=f"searching for totally useless columns")
+
+    original_columns = set(df.columns)
+    # removes totally meaningless columns
+    for col in df.columns:
+        if re.match(r"(AMT_REQ_CREDIT_BUREAU_(HOUR|WEEK|DAY|QRT))|(.*_(AVG|MODE))|(WEEKDAY_APPR_PROCESS_START)", col) != None:
+            df = df.drop(columns=col)
+
+    if log: section_timer.end_timer(log=f"removed {len(original_columns - set(df.columns))} columns for a final shape of {df.shape}")
+    return df
 
 def remove_ids(df):
     for col in df.columns:
@@ -10,13 +23,16 @@ def remove_ids(df):
             df = df.drop(columns=[col])
     return df
 
-def remove_infs(df):
-    df = df.replace([np.inf, -np.inf, "inf", "inf"], np.nan)
+def remove_infs(df, value=np.nan):
+    df = df.replace([np.inf, -np.inf, "inf", "inf"], value)
     return df
 
 
 def correct_nan_values(df, log=False):
     if log: section_timer = Timer(log=f"searching for anomalies")
+
+    # converts some particular strings into nans
+    df = df.replace(to_replace=["XAP", "XNA"], value=np.nan)
 
     # loop through each column
     for col in df.columns:
@@ -28,11 +44,13 @@ def correct_nan_values(df, log=False):
             #df[col] = __check_unuseful_col(df[col], log=False)
 
             # we want to delete single values with opposite sign
-            df[col] = __check_single_sign_value(df[col], log=False)
+            #df[col] = __check_single_sign_value(df[col], log=False)
 
             # if it's a continuous feature
-            if len(unique_values) >= 50:
-                df[col] = __check_frequency_anomaly(df[col], log=False)
+            #if len(unique_values) >= 50:
+                #df[col] = __check_frequency_anomaly(df[col], log=False)
+            if len(unique_values) == 2:
+                df[col] = df[col].replace(unique_values-{0}, 1)
 
     if log: section_timer.end_timer(log=f"done")
 
@@ -84,6 +102,6 @@ def __check_unuseful_col(series, log=False):
     unique_values = set(series.unique())
     percs = series.value_counts(normalize=True)
     # if the column has nearly a single value
-    if percs.iloc[0] > 0.99:
+    if percs.iloc[0] > 0.95:
         series = series.replace(to_replace=list(unique_values), value=np.nan)
     return series

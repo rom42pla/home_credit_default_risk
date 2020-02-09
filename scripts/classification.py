@@ -1,14 +1,18 @@
 import numpy as np
+import pandas as pd 
 
-from sklearn.model_selection import train_test_split
+import itertools
+from sklearn.model_selection import KFold
 from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.ensemble import VotingClassifier, RandomForestClassifier, AdaBoostClassifier
+from sklearn.ensemble import VotingClassifier, RandomForestClassifier, AdaBoostClassifier, GradientBoostingClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.metrics import f1_score, roc_auc_score
 from sklearn.linear_model import LogisticRegression
-from sklearn.svm import LinearSVC
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.svm import SVC
 
+from feature_engineering import transformations
 import lightgbm as lgb
 
 from Timer import Timer
@@ -77,7 +81,7 @@ def multilayer_perceptron(X_train=None, X_validate=None, y_train=None, y_validat
     positive_label = list(filter(lambda value: "1" in str(value), set(y_train.tolist())))[0]
     # tuning the classifier
     if tuning:
-        if log: section_timer = Timer(log=f"tuning Logistic Regression classifier")
+        if log: section_timer = Timer(log=f"tuning Multilayer Perceptron classifier")
         # testing several parameters
         bestScore, activation_best, learning_rate_best = 0, None, None
         for activation in ["logistic", "relu"]:
@@ -121,15 +125,39 @@ def knn(X_train=None, X_validate=None, y_train=None, y_validate=None, tuning=Fal
 
     return classifier
 
+def lda(X_train=None, X_validate=None, y_train=None, y_validate=None, tuning=False, log=False):
+    # positive class symbol (usually 1)
+    positive_label = list(filter(lambda value: "1" in str(value), set(y_train.tolist())))[0]
+    # tuning the classifier
+    if tuning:
+        if log: section_timer = Timer(log=f"tuning Linear Discriminant Analysis classifier")
+        # testing several parameters
+        bestScore, solver_best, shrinkage_best = 0, "svd", None
+        for solver in ["svd", "eigen", "lsqr"]:
+            if solver != "svd":
+                for shrinkage in [None, "auto"]:
+                    classifier = LinearDiscriminantAnalysis(solver=solver, shrinkage=shrinkage).fit(X_train, y_train)
+                    score = f1_score(y_validate, classifier.predict(X_validate))
+                    if (score > bestScore):
+                        bestScore, solver_best, shrinkage_best = score, solver, shrinkage
+        # choosing best parameters
+        classifier = LinearDiscriminantAnalysis(solver=solver_best, shrinkage=shrinkage_best)
+        if log: section_timer.end_timer(log=f"done with a max score of {bestScore}")
+    # default classifier
+    else:
+        classifier = LinearDiscriminantAnalysis()
+
+    return classifier
+
 def svm(X_train=None, X_validate=None, y_train=None, y_validate=None, tuning=False, log=False):
-    classifier = LinearSVC(max_iter=3000)
+    classifier = SVC(kernel='poly')
     return classifier
 
 def adaboost(X_train=None, X_validate=None, y_train=None, y_validate=None, tuning=False, log=False):
     classifier = AdaBoostClassifier(base_estimator=LogisticRegression(dual=False, max_iter=300, n_jobs=1),n_estimators=250)
     return classifier
 
-def predict(X_train, X_test, y_train, X_validate=None, y_validate=None, mode="ensemble", tuning=False, probabilities=True, log=False):
+def predict(X_train, X_test, y_train, X_validate=None, y_validate=None, mode="ensemble", tuning=False, probabilities=True, k_fold_splits=3, log=False):
     # ensemble
     # https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.VotingClassifier.html
     if mode.lower().strip() in ["ensemble", "voting"]:
@@ -201,28 +229,114 @@ def predict(X_train, X_test, y_train, X_validate=None, y_validate=None, mode="en
 
     elif mode.lower().strip() in ["lgb", "lgbt"]:
         classifier_name = "lgb"
+
         if log: section_timer = Timer(log=f"predicting using {classifier_name} classifier")
-        lgb_train = lgb.Dataset(X_train, y_train)
-        lgb_eval = lgb.Dataset(X_test, reference=lgb_train)
+        features = X_train
+        test_features = X_test
+        best_preds, best_score = np.zeros(X_test.shape[0]), 0
+        if tuning:
+            # parameters are:
+            # learning_rate, max_bin, num_leaves, min_data_in_leaf, max_depth, lambdal1, lambdal2
+            parameters_combinations = list(itertools.product([0.05, 0.1], [100, 250, 500], [8, 512, 2048], [100, 500, 1000, 2500], [-1, 5, 10], [0, 0.25, 0.5], [0, 0.25, 0.5]))
+            best_combination = parameters_combinations[0]
+            
+            for i, combination in enumerate(parameters_combinations):
+                if log: print(f"\n\t...trying combination {i + 1} of {len(parameters_combinations)}, with a current best score of {best_score} and combination {best_combination}...\n")
+                try:
+                    learning_rate, max_bin, num_leaves, min_data_in_leaf, max_depth, lambdal1, lambdal2 = combination
+                    model = lgb.LGBMClassifier(n_estimators=500, objective='binary', n_jobs=-1, verbose=-1,
+                                            class_weight='balanced', device="cpu",
+                                            learning_rate=learning_rate,
+                                            reg_alpha=0.1, reg_lambda=0.1, min_data_in_leaf=min_data_in_leaf,
+                                            bagging_fraction=0.25, bagging_freq=5, 
+                                            max_bin=max_bin, num_leaves=num_leaves, max_depth=max_depth,
+                                            lambdal1=lambdal1, lambdal2=lambdal2)
 
-        params = {
-            'boosting_type': 'gbdt',
-            'objective': 'binary',
-            'n_jobs': 6,
-            'verbosity': 1
-        }
+                    test_predictions = np.zeros(X_test.shape[0])
+                    
+                    for train_indices, valid_indices in KFold(n_splits=k_fold_splits, shuffle=True, random_state=42).split(features):
+                        train_features, train_labels = features[train_indices], y_train[train_indices]
+                        valid_features, valid_labels = features[valid_indices], y_train[valid_indices]
 
-        gbm = lgb.train(params, lgb_train, num_boost_round=20, valid_sets=lgb_eval, early_stopping_rounds=5)
-        y_pred = gbm.predict(X_test, num_iteration=gbm.best_iteration)
+                        # training
+                        model = model.fit(train_features, train_labels, eval_metric='auc',
+                                eval_set=[(valid_features, valid_labels), (train_features, train_labels)],
+                                eval_names=['test', 'train'], categorical_feature='auto',
+                                early_stopping_rounds=500, verbose=-1)
+                        best_iteration = model.best_iteration_
+                        print(model.best_score_)
+                        train_score, test_score = model.best_score_["train"]["auc"] - model.best_score_["train"]["binary_logloss"], model.best_score_["test"]["auc"] - - model.best_score_["test"]["binary_logloss"]
+                        
+                        # if we are over/underfitting, current parameters are bad
+                        if train_score - test_score > 0.05 or train_score - test_score < -0.05: break
 
-        if log: section_timer.end_timer(log=f"done")
-        return y_pred, None
+                        # prediction
+                        test_predictions += model.predict_proba(test_features, num_iteration=best_iteration)[:, 1] / k_fold_splits
+
+                        # updates parameters
+                        if test_score > best_score:
+                            best_combination, best_preds, best_score = combination, test_predictions, test_score
+                except:
+                    continue
+            if log: section_timer.end_timer(log=f"found best combination {best_combination} and best score {best_score}")
+        else:
+            learning_rate, max_bin, num_leaves, min_data_in_leaf, max_depth, lambdal1, lambdal2 = (0.05, 100, 8, 100, -1, 0, 0)
+            '''
+            model = lgb.LGBMClassifier(n_estimators=500, objective='binary', n_jobs=-1, verbose=-1,
+                                            class_weight='balanced', device="cpu",
+                                            learning_rate=learning_rate,
+                                            reg_alpha=0.1, reg_lambda=0.1, min_data_in_leaf=min_data_in_leaf,
+                                            bagging_fraction=0.25, bagging_freq=5, 
+                                            max_bin=max_bin, num_leaves=num_leaves, max_depth=max_depth,
+                                            lambdal1=lambdal1, lambdal2=lambdal2)
+            '''
+            model = lgb.LGBMClassifier(n_estimators=1000, objective='binary', n_jobs=-1,
+                                       class_weight='balanced', learning_rate=0.05,
+                                       reg_alpha=0.3, reg_lambda=0.2,
+                                       max_bin=50)
+
+            test_predictions = np.zeros(X_test.shape[0])
+
+            i = 0
+
+            for train_indices, valid_indices in KFold(n_splits=k_fold_splits, shuffle=True).split(features):
+                i += 1
+                print("\n----------------> ", i)
+                
+                train_features, train_labels = features[train_indices], y_train[train_indices]
+                valid_features, valid_labels = features[valid_indices], y_train[valid_indices]
+
+                # training
+                model = model.fit(train_features, train_labels, eval_metric='auc',
+                        eval_set=[(valid_features, valid_labels), (train_features, train_labels)],
+                        eval_names=['test', 'train'], categorical_feature='auto',
+                        early_stopping_rounds=500, verbose=-1)
+                best_iteration = model.best_iteration_
+                best_score = max(best_score, model.best_score_["test"]["auc"])
+
+                # prediction
+                test_predictions += model.predict_proba(test_features, num_iteration=best_iteration)[:, 1]
+
+            if log: section_timer.end_timer(log=f"best score: {best_score}")
+
+        return test_predictions / k_fold_splits, None
+
+    elif mode.lower().strip() in ["lda", "linear discriminant"]:
+        classifier_name = "Linear Discriminant Analysis"
+        if log: section_timer = Timer(log=f"predicting using {classifier_name} classifier")
+        classifier = lda(X_train=X_train, X_validate=X_validate, y_train=y_train, y_validate=y_validate,
+                              tuning=tuning, log=log)
+
+    elif mode.lower().strip() in ["gb", "gradient boosting"]:
+        classifier_name = "Gradient Boosting"
+        if log: section_timer = Timer(log=f"predicting using {classifier_name} classifier")
+        classifier = GradientBoostingClassifier()
 
     else:
-        raise Exception(f'Unrecognized mode f{mode.strip()}.\nOnly supported modes are "ensemble", "bayes", "logistic", "rf", "mlp", "knn"')
+        raise Exception(f'Unrecognized mode f{mode.strip()}.\nOnly supported modes are "ensemble", "bayes", "logistic", "rf", "mlp", "knn", "lda"')
 
     # prediction
-    if probabilities:
+    if probabilities and classifier_name != "SVM":
         y_pred = classifier.fit(X_train, y_train).predict_proba(X_test)[:, 1]
     else:
         y_pred = classifier.fit(X_train, y_train).predict(X_test)

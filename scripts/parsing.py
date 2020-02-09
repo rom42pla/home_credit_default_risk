@@ -39,7 +39,7 @@ def parse_CSV_to_df(file_path, lines_cap=None, reduce_size=False, log=False):
     return df
 
 
-def write_df_to_file(df, file_path, index=False, header=True, log=False):
+def write_df_to_file(df, file_path, index=False, reduce_size=True, header=True, log=False):
     """
     :param df:
         Pandas' dataframe being written to a file
@@ -50,12 +50,15 @@ def write_df_to_file(df, file_path, index=False, header=True, log=False):
         section_timer = Timer(
             log=f"writing file {file_path}")
 
+    if reduce_size:
+        df = reduce_dataframe_size(df)
+
     df.to_csv(path_or_buf=file_path, index=index, header=header, sep=",")
 
     if log:
         section_timer.end_timer(log=f"written a dataframe of {df.shape[0]} rows and {df.shape[1]} features")
 
-def merge_dfs(dfs, data_path, groupby_mode="mean", just_one_hot=False, log=False):  # to join all the other dataframes.
+def merge_dfs(dfs, data_path, groupby_mode="mean", just_one_hot=False, do_imputing=False, log=False):  # to join all the other dataframes.
     """
     Merges the dataframe to the original one, to have a dataframe complete with all the information.
     :param original_dataframe:
@@ -69,7 +72,7 @@ def merge_dfs(dfs, data_path, groupby_mode="mean", just_one_hot=False, log=False
     """
     if log: section_timer = Timer(log=f"merging the dataframes")
 
-    bureau, prev_application = __joining_minor_csvs(data_path, just_one_hot=just_one_hot, groupby_mode="mean")
+    bureau, prev_application = __joining_minor_csvs(data_path, just_one_hot=just_one_hot, do_imputing=do_imputing, groupby_mode="mean")
     for i in range(len(dfs)):
         dfs[i] = pd.merge(left=dfs[i], right=bureau,
                           how='left', on="SK_ID_CURR", left_index=True)
@@ -80,7 +83,7 @@ def merge_dfs(dfs, data_path, groupby_mode="mean", just_one_hot=False, log=False
 
     return [reduce_dataframe_size(df) for df in dfs]
 
-def __joining_minor_csvs(data_path, groupby_mode="mean", just_one_hot=False, log=False):  # to join all the other dataframes.
+def __joining_minor_csvs(data_path, groupby_mode="mean", just_one_hot=False, do_imputing=False, log=False):  # to join all the other dataframes.
     """
     Merges the bureau and previous_application to all their lower levels dataframes.
     :param data_path:
@@ -97,30 +100,7 @@ def __joining_minor_csvs(data_path, groupby_mode="mean", just_one_hot=False, log
     bureau, _ = nan_treatment.remove_columns(df=bureau, threshold=0.5, log=False)
     bureau = encoding.frequency_encoding(bureau, just_one_hot=just_one_hot)
 
-    bur_balance = pd.read_csv(data_path + "bureau_balance.csv")  # the dataframe to add to the old one
-    bur_balance = anomalies_treatment.correct_nan_values(bur_balance, log=False)
-    bur_balance, _ = nan_treatment.remove_columns(df=bur_balance, threshold=0.5, log=log)
-    bur_balance = encoding.frequency_encoding(bur_balance, just_one_hot=just_one_hot)
-
-    if groupby_mode == "mean":
-        bur_balance = bur_balance.groupby("SK_ID_BUREAU", as_index=False).mean()
-    elif groupby_mode == "sum":
-        bur_balance = bur_balance.groupby("SK_ID_BUREAU", as_index=False).sum()
-    elif groupby_mode == "mode":
-        bur_balance = bur_balance.groupby("SK_ID_BUREAU", as_index=False).mode()
-    else:
-        raise ValueError("Only recognized mode are 'sum' and 'mean'")
-
-    bureau = pd.merge(left=bureau, right=bur_balance,
-                      how='left', on="SK_ID_BUREAU", left_index=True)
-    if groupby_mode == "mean":
-        bureau = bureau.groupby("SK_ID_CURR", as_index=False).mean()
-    elif groupby_mode == "sum":
-        bureau = bureau.groupby("SK_ID_CURR", as_index=False).sum()
-    elif groupby_mode == "mode":
-        bureau = bureau.groupby("SK_ID_CURR", as_index=False).mode()
-    else:
-        raise ValueError("Only recognized mode are 'sum', 'mean' and 'mode'")
+    bureau = bureau.groupby("SK_ID_CURR", as_index=False).max()
 
     #--------------------------------#
     #------# prev_application #------#
@@ -139,6 +119,7 @@ def __joining_minor_csvs(data_path, groupby_mode="mean", just_one_hot=False, log
         df_to_join = anomalies_treatment.correct_nan_values(df_to_join)
         df_to_join, _ = nan_treatment.remove_columns(df=df_to_join, threshold=0.5, log=False)
         df_to_join = encoding.frequency_encoding(df_to_join, just_one_hot=just_one_hot)
+
         if groupby_mode == "mean":
             df_to_join = df_to_join.groupby(key, as_index=False).mean()
         elif groupby_mode == "sum":
@@ -160,7 +141,7 @@ def __joining_minor_csvs(data_path, groupby_mode="mean", just_one_hot=False, log
         prev_application = prev_application.groupby("SK_ID_CURR", as_index=False).mean()
     else:
         raise ValueError("Only recognized mode are 'sum' and 'mean'")
-
+        
     return bureau, prev_application
 
 def reduce_dataframe_size(df, log=False):
@@ -200,3 +181,11 @@ def reduce_dataframe_size(df, log=False):
 def get_size(df):
     size_MB = df.memory_usage().sum() / 1024**2
     return size_MB
+
+def get_quantitative_features(df, min_unique_values=50):
+    cols, quantitative_cols = list(df.columns), []
+    for col in cols:
+        unique_values = len(set(df[col].unique()))
+        if unique_values > min_unique_values:
+            quantitative_cols.append(col)
+    return quantitative_cols

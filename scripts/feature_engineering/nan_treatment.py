@@ -19,13 +19,14 @@ def remove_columns(df, threshold, log=False):
         Flag for log on the console
     :return:
     """
-    if log: sectionTimer = Timer(log=f"removing columns with more than {threshold * 100}% of NaNs")
-
+    if log: sectionTimer = Timer(log=f"removing columns with more than {threshold * 100}% of nans")
+            
+    # removes columns with many nans
     non_nan_values = int(df.shape[0] * (1 - threshold))
     df_clean = df.dropna(thresh=non_nan_values, axis=1)
     dropped_cols = list(set(df.columns) - set(df_clean.columns))
 
-    if log: sectionTimer.end_timer(log=f"removed {df.shape[1] - df_clean.shape[1]} columns")
+    if log: sectionTimer.end_timer(log=f"removed {len(set(df.columns)) - df_clean.shape[1]} columns")
     return df_clean, dropped_cols
 
 def remove_rows(df, threshold, log=False):
@@ -57,12 +58,14 @@ def align_left(df1, df2, log=False):
     return df1, df2
 
 def impute_missing_values(df, mode="simple", columns=None, reduce_size=False, log=False):
-    if log: section_timer = Timer(log=f"imputing missing values")
-
     if columns == None:
         columns_to_impute = list(df.columns)
+    elif columns == []:
+        return df
     else:
         columns_to_impute = columns
+
+    if log: section_timer = Timer(log=f"imputing missing values")
 
     X = df[columns_to_impute].to_numpy()
 
@@ -79,14 +82,13 @@ def impute_missing_values(df, mode="simple", columns=None, reduce_size=False, lo
         imputer = SimpleImputer(strategy="most_frequent", copy=False)
 
     elif mode.lower().strip() == "iterative":
-        imputer = IterativeImputer().fit_transform(X)
+        imputer = IterativeImputer(max_iter=3, n_nearest_features=5)
 
     else:
         raise Exception(f'Unrecognized mode f{mode.strip()}.\nOnly supported modes are "simple 0", "simple mean", "simple median", "simple most common", "iterative"')
 
     X_pred = imputer.fit_transform(X)
 
-    #print(len(columns_to_impute), X_pred.shape)
     df[columns_to_impute] = X_pred
 
     if reduce_size:
