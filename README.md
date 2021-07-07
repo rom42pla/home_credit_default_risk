@@ -4,13 +4,13 @@
 
 The project has been done by:
 
-- [Simone Ercolino](https://github.com/Simonerc95)
-- [Romeo Lanzino](https://github.com/rom42pla)
-- [Dario Ruggeri](https://github.com/DarioRugg)
+- Simone Ercolino, @Simonerc95
+- Romeo Lanzino, @rom42pla
+- Dario Ruggeri, @DarioRugg
 
 <img src="https://www.chimicifisici.it/wp-content/uploads/2019/04/Sapienza_logo-1024x307.png" alt="drawing" width="400"/>
 
-## Approach and methodologies
+## Modus operandi
 
 Our working final model is based on LightGBM, a gradient boosting framework that uses tree based learning algorithms,
 proved very useful in solving this particular problem.
@@ -56,14 +56,14 @@ previous models were not improving AUC score, and in some cases even worsened it
 
 The project is strusctured as follows:
 
-- The main directory is named `home_credit_default_risk_competition` and is where the program expects the `data` folder,
-  where the CSVs should be.
-- Inside the main folder there is the `script` folder where all the `.py` modules are, `main.py` included.
-    - moreover, inside `scripts` there is the `feature_engineering` package where other `.py` modules are placed.
-- `submission.csv` will be created from the program in a folder that will be in the main directory in the `logs`
+- The main directory is named as FinalProjectFDS and is where the program expects the “data” folder, where the CSVs
+  should be.
+- Inside the main folder there is the script folder where all the .py modules are, main.py included.
+    - moreover, inside scripts there is the “feature_engineering” package where other `.py` modules are placed.
+- The submission csv will be created from the program in a folder that will be in the main directory in the “logs”
   folder, that will be created automatically by running the script.
 
 ## Results
 
-For the final solution, we achieved the **private AUC score of 0.78567** with **LGBM classifier** and running time of
-about 30 minutes.
+For the final solution, we achieved the private AUC score of 0.78567 with LGBM classifier and running time of about 30
+minutes.
